@@ -1,0 +1,26 @@
+name: safezone
+description: A new Flutter project.
+publish_to: 'none'
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # --- Firebase (compatibles Flutter 3.35 / Dart 3.5) ---
+  firebase_core: ^3.8.0
+  firebase_auth: ^5.3.1
+  cloud_firestore: ^5.4.4
+
+  # --- Caméra et galerie ---
+  camera: ^0.11.0+2
+  image_picker: ^1.1.2
+  file_picker: ^8.1.2
+
+  # --- Géolocalisation ---
+  geolocator: ^12.0.0
+  geocoding: ^3.0.0
+
+  #
