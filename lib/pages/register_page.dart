@@ -19,14 +19,26 @@ class _RegisterPageState extends State<RegisterPage> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool loading = false;
+  bool _loading = false;
 
-  Future<void> register() async {
-    setState(() => loading = true);
+  Future<void> _register() async {
+    if (_nameController.text.isEmpty ||
+        _surnameController.text.isEmpty ||
+        _emailController.text.isEmpty ||
+        _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Veuillez remplir tous les champs')));
+      return;
+    }
+
+    setState(() => _loading = true);
+
     try {
-      final userCredential = await _auth.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim());
+      final userCredential =
+          await _auth.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
 
       await _firestore.collection('users').doc(userCredential.user!.uid).set({
         'name': _nameController.text.trim(),
@@ -46,8 +58,18 @@ class _RegisterPageState extends State<RegisterPage> {
         SnackBar(content: Text(e.message ?? 'Erreur inconnue')),
       );
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) setState(() => _loading = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _surnameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -55,38 +77,42 @@ class _RegisterPageState extends State<RegisterPage> {
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(20),
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Nom'),
-              ),
-              TextField(
-                controller: _surnameController,
-                decoration: const InputDecoration(labelText: 'Prénom'),
-              ),
-              TextField(
-                controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'Téléphone'),
-              ),
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
-              ),
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Mot de passe'),
-                obscureText: true,
-              ),
-              const SizedBox(height: 20),
-              loading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: register,
-                      child: const Text('S’inscrire'),
-                    ),
-            ],
+        child: Center(
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(labelText: 'Nom'),
+                ),
+                TextField(
+                  controller: _surnameController,
+                  decoration: const InputDecoration(labelText: 'Prénom'),
+                ),
+                TextField(
+                  controller: _phoneController,
+                  decoration: const InputDecoration(labelText: 'Téléphone'),
+                  keyboardType: TextInputType.phone,
+                ),
+                TextField(
+                  controller: _emailController,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                TextField(
+                  controller: _passwordController,
+                  decoration: const InputDecoration(labelText: 'Mot de passe'),
+                  obscureText: true,
+                ),
+                const SizedBox(height: 20),
+                _loading
+                    ? const CircularProgressIndicator()
+                    : ElevatedButton(
+                        onPressed: _register,
+                        child: const Text('S’inscrire'),
+                      ),
+              ],
+            ),
           ),
         ),
       ),

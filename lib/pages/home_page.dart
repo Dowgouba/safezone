@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'alerte_page.dart';
+import 'alerteform.dart';
+import 'map_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -12,109 +12,49 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _currentIndex = 0;
-  final _pages = ["Carte", "Alertes", "Profil"];
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  File? _image;
-  final _picker = ImagePicker();
-  final _descriptionController = TextEditingController();
 
-  Future<void> pickImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.camera);
-    if (pickedFile != null) {
-      setState(() {
-        _image = File(pickedFile.path);
-      });
-    }
-  }
+  final List<Widget> _pagesWidgets = [
+    const MapPage(),
+    const AlertePage(),
+    // placeholder pour profil utilisateur
+    Container(
+      color: Colors.white,
+      child: const Center(
+          child: Text('Profil', style: TextStyle(fontSize: 20))),
+    ),
+  ];
 
-  Future<void> sendAlert() async {
-    if (_descriptionController.text.isEmpty && _image == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Alerte vide !")));
-      return;
-    }
-
-    await _firestore.collection('alerts').add({
-      'description': _descriptionController.text,
-      'timestamp': FieldValue.serverTimestamp(),
-      'imagePath': _image?.path ?? '',
-    });
-
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text("Alerte envoyée !")));
-
-    setState(() {
-      _descriptionController.clear();
-      _image = null;
-    });
-  }
-
-  void _showAlertDialog() {
-    showDialog(
-        context: context,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text("Nouvelle alerte"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: _descriptionController,
-                  decoration: const InputDecoration(
-                      hintText: "Décrire l'alerte ici"),
-                ),
-                const SizedBox(height: 10),
-                _image != null
-                    ? Image.file(_image!, height: 100)
-                    : const SizedBox(),
-                TextButton.icon(
-                  onPressed: pickImage,
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text("Prendre une photo"),
-                )
-              ],
-            ),
-            actions: [
-              TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Annuler")),
-              ElevatedButton(
-                  onPressed: () {
-                    sendAlert();
-                    Navigator.pop(context);
-                  },
-                  child: const Text("Envoyer")),
-            ],
-          );
-        });
-  }
+  final List<String> _pageTitles = ["Carte", "Alertes", "Profil"];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_pages[_currentIndex])),
-      body: Center(
-        child: Text(
-          _pages[_currentIndex],
-          style: const TextStyle(fontSize: 30),
-        ),
-      ),
+      appBar: AppBar(title: Text(_pageTitles[_currentIndex])),
+      body: _pagesWidgets[_currentIndex],
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAlertDialog,
+        heroTag: 'home_fab',
+        onPressed: () {
+          // Si on est sur la page Alertes, ouvrir le formulaire complet
+          if (_currentIndex == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AjoutAlertePage()),
+            );
+          } else {
+            // Pour Carte ou Profil, on peut définir d'autres actions si besoin
+            ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Action non disponible ici.")));
+          }
+        },
         child: const Icon(Icons.add_alert),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
         items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.map), label: "Carte"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.warning), label: "Alertes"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.person), label: "Profil"),
+          BottomNavigationBarItem(icon: Icon(Icons.map), label: "Carte"),
+          BottomNavigationBarItem(icon: Icon(Icons.warning), label: "Alertes"),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profil"),
         ],
       ),
     );
