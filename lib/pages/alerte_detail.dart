@@ -34,7 +34,6 @@ class AlerteDetailPage extends StatefulWidget {
 
 class _AlerteDetailPageState extends State<AlerteDetailPage> {
   late final MapController _mapController;
-  // LocationService was used for external maps; internal route page handles position
   final UserService _userService = UserService();
   final AlertService _alertService = AlertService();
 
@@ -49,7 +48,7 @@ class _AlerteDetailPageState extends State<AlerteDetailPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Détails de l\'alerte'),
-        backgroundColor: const Color.fromARGB(223, 60, 22, 231),
+        backgroundColor: Colors.blue, // Correction ici
         actions: [
           if (widget.id != null)
             IconButton(
@@ -169,7 +168,6 @@ class _AlerteDetailPageState extends State<AlerteDetailPage> {
                         backgroundColor:
                             const Color.fromARGB(255, 56, 19, 208)),
                     onPressed: () async {
-                      // Open internal route map page so contact can follow the reporter.
                       Navigator.push(
                         context,
                         MaterialPageRoute(

@@ -20,10 +20,10 @@ class _UserProfilePageState extends State<UserProfilePage> {
   final _auth = FirebaseAuth.instance;
   final _picker = ImagePicker();
 
-  TextEditingController _nameController = TextEditingController();
-  TextEditingController _surnameController = TextEditingController();
-  TextEditingController _phoneController = TextEditingController();
-  TextEditingController _emailController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _surnameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
 
   List<Map<String, dynamic>> _contacts = [];
   String? _photoUrl;
@@ -43,14 +43,14 @@ class _UserProfilePageState extends State<UserProfilePage> {
     final doc = await _firestore.collection('users').doc(viewedUid).get();
     if (!doc.exists) return;
 
-  final data = doc.data()!;
-  _nameController.text = data['name'] ?? '';
-  _surnameController.text = data['surname'] ?? '';
-  _phoneController.text = data['phone'] ?? '';
-  _emailController.text = data['email'] ?? '';
-  _contacts = List<Map<String, dynamic>>.from(data['contacts'] ?? []);
-  _photoUrl = data['photoUrl'] as String?;
-  setState(() => _loading = false);
+    final data = doc.data()!;
+    _nameController.text = data['name'] ?? '';
+    _surnameController.text = data['surname'] ?? '';
+    _phoneController.text = data['phone'] ?? '';
+    _emailController.text = data['email'] ?? '';
+    _contacts = List<Map<String, dynamic>>.from(data['contacts'] ?? []);
+    _photoUrl = data['photoUrl'] as String?;
+    setState(() => _loading = false);
   }
 
   Future<void> _pickImageAndUpload() async {
@@ -81,7 +81,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
       final downloadUrl = 'https://firebasestorage.googleapis.com/v0/b/$bucket/o/${Uri.encodeComponent(path)}?alt=media';
 
       await _firestore.collection('users').doc(viewedUid).update({'photoUrl': downloadUrl});
-      setState(() {});
+      setState(() {
+        _photoUrl = downloadUrl;
+      });
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo uploadée')));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
@@ -105,6 +107,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
     }
   }
+
   void _addOrEditContact({Map<String, dynamic>? contact, int? index}) {
     final _contactNameController =
         TextEditingController(text: contact != null ? contact['name'] : '');
@@ -160,85 +163,166 @@ class _UserProfilePageState extends State<UserProfilePage> {
     setState(() => _contacts.removeAt(index));
   }
 
+  Future<void> _logout() async {
+    await _auth.signOut();
+    if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profil utilisateur')),
+      appBar: AppBar(
+        title: const Text('Profil utilisateur'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Déconnexion',
+            onPressed: _logout,
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            GestureDetector(
-              onTap: _pickImageAndUpload,
-              child: CircleAvatar(
-                radius: 50,
-                backgroundImage: _photoUrl != null
-                    ? NetworkImage(_photoUrl!)
-                    : (_auth.currentUser!.photoURL != null ? NetworkImage(_auth.currentUser!.photoURL!) : null) as ImageProvider<Object>?,
-                child: (_photoUrl == null && _auth.currentUser!.photoURL == null)
-                    ? const Icon(Icons.person, size: 50)
-                    : null,
+            Card(
+              elevation: 6,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                child: Column(
+                  children: [
+                    GestureDetector(
+                      onTap: _pickImageAndUpload,
+                      child: CircleAvatar(
+                        radius: 50,
+                        backgroundImage: _photoUrl != null
+                            ? NetworkImage(_photoUrl!)
+                            : (_auth.currentUser!.photoURL != null
+                                ? NetworkImage(_auth.currentUser!.photoURL!)
+                                : null) as ImageProvider<Object>?,
+                        backgroundColor: Colors.grey[200],
+                        child: (_photoUrl == null && _auth.currentUser!.photoURL == null)
+                            ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '${_nameController.text} ${_surnameController.text}',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _emailController.text,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.blueGrey),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: 'Nom'),
+              decoration: const InputDecoration(
+                labelText: 'Nom',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             TextField(
               controller: _surnameController,
-              decoration: const InputDecoration(labelText: 'Prénom'),
+              decoration: const InputDecoration(
+                labelText: 'Prénom',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person_outline),
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             TextField(
               controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
+              decoration: const InputDecoration(
+                labelText: 'Email',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.email),
+              ),
               keyboardType: TextInputType.emailAddress,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             TextField(
               controller: _phoneController,
-              decoration: const InputDecoration(labelText: 'Téléphone'),
+              decoration: const InputDecoration(
+                labelText: 'Téléphone',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.phone),
+              ),
               keyboardType: TextInputType.phone,
             ),
-            const SizedBox(height: 16),
-            const Text('Contacts prédéfinis', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Contacts prédéfinis', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ElevatedButton.icon(
+                  onPressed: () => _addOrEditContact(),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Ajouter'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _contacts.length,
               itemBuilder: (context, index) {
                 final contact = _contacts[index];
-                return ListTile(
-                  title: Text(contact['name'] ?? ''),
-                  subtitle: Text(contact['phone'] ?? ''),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () => _addOrEditContact(contact: contact, index: index),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () => _deleteContact(index),
-                      ),
-                    ],
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  child: ListTile(
+                    leading: const Icon(Icons.contact_phone),
+                    title: Text(contact['name'] ?? ''),
+                    subtitle: Text(contact['phone'] ?? ''),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () => _addOrEditContact(contact: contact, index: index),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete),
+                          onPressed: () => _deleteContact(index),
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },
             ),
-            ElevatedButton(
-              onPressed: () => _addOrEditContact(),
-              child: const Text('Ajouter un contact'),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _saveProfile,
-              child: const Text('Sauvegarder le profil'),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _saveProfile,
+                icon: const Icon(Icons.save),
+                label: const Text('Sauvegarder le profil'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
             ),
           ],
         ),

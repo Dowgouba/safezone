@@ -15,21 +15,7 @@ class AlertePage extends StatelessWidget {
     final userService = UserService();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Liste des alertes'),
-        backgroundColor: const Color.fromARGB(255, 108, 97, 97),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add_alert),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AjoutAlertePage()),
-              );
-            },
-          ),
-        ],
-      ),
+
       body: StreamBuilder<List<AlertModel>>(
         stream: alertService.streamAlertes(),
         builder: (context, snapshot) {
