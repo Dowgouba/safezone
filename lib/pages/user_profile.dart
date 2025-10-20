@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import '../firebase_options.dart';
 
 class UserProfilePage extends StatefulWidget {
-  final String? uid; // optional: if null, show current user's profile
+  final String? uid;
 
   const UserProfilePage({super.key, this.uid});
 
@@ -16,21 +16,20 @@ class UserProfilePage extends StatefulWidget {
 }
 
 class _UserProfilePageState extends State<UserProfilePage> {
-  final _firestore = FirebaseFirestore.instance;
-  final _auth = FirebaseAuth.instance;
-  final _picker = ImagePicker();
+  final FirebaseFirestore firestore = FirebaseFirestore.instance;
+  final FirebaseAuth auth = FirebaseAuth.instance;
+  final ImagePicker picker = ImagePicker();
 
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _surnameController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController surnameController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
 
-  List<Map<String, dynamic>> _contacts = [];
-  String? _photoUrl;
+  String? photoUrl;
+  bool loading = true;
+  bool isEditing = false;
 
-  bool _loading = true;
-
-  String get currentUid => _auth.currentUser!.uid;
+  String get currentUid => auth.currentUser!.uid;
   String get viewedUid => widget.uid ?? currentUid;
 
   @override
@@ -40,35 +39,40 @@ class _UserProfilePageState extends State<UserProfilePage> {
   }
 
   Future<void> _loadUserData() async {
-    final doc = await _firestore.collection('users').doc(viewedUid).get();
+    final doc = await firestore.collection('users').doc(viewedUid).get();
     if (!doc.exists) return;
 
     final data = doc.data()!;
-    _nameController.text = data['name'] ?? '';
-    _surnameController.text = data['surname'] ?? '';
-    _phoneController.text = data['phone'] ?? '';
-    _emailController.text = data['email'] ?? '';
-    _contacts = List<Map<String, dynamic>>.from(data['contacts'] ?? []);
-    _photoUrl = data['photoUrl'] as String?;
-    setState(() => _loading = false);
+    nameController.text = data['name'] ?? '';
+    surnameController.text = data['surname'] ?? '';
+    phoneController.text = data['phone'] ?? '';
+    emailController.text = data['email'] ?? '';
+    photoUrl = data['photoUrl'] as String?;
+    setState(() => loading = false);
   }
 
   Future<void> _pickImageAndUpload() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 1200, imageQuality: 85);
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1200,
+      imageQuality: 85,
+    );
     if (picked == null) return;
 
-    setState(() => _loading = true);
+    setState(() => loading = true);
 
     try {
       final fileBytes = await picked.readAsBytes();
       final bucket = DefaultFirebaseOptions.currentPlatform.storageBucket;
-      final path = 'user_photos/$viewedUid/${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final path =
+          'user_photos/$viewedUid/${DateTime.now().millisecondsSinceEpoch}.jpg';
 
-      final currentUser = _auth.currentUser;
+      final currentUser = auth.currentUser;
       if (currentUser == null) throw Exception('Utilisateur non connecté');
       final token = await currentUser.getIdToken();
 
-      final uri = Uri.parse('https://firebasestorage.googleapis.com/v0/b/$bucket/o?name=${Uri.encodeComponent(path)}&uploadType=media');
+      final uri = Uri.parse(
+          'https://firebasestorage.googleapis.com/v0/b/$bucket/o?name=${Uri.encodeComponent(path)}&uploadType=media');
       final resp = await http.post(uri, headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'image/jpeg'
@@ -78,99 +82,166 @@ class _UserProfilePageState extends State<UserProfilePage> {
         throw Exception('Upload failed: ${resp.statusCode} ${resp.body}');
       }
 
-      final downloadUrl = 'https://firebasestorage.googleapis.com/v0/b/$bucket/o/${Uri.encodeComponent(path)}?alt=media';
+      final downloadUrl =
+          'https://firebasestorage.googleapis.com/v0/b/$bucket/o/${Uri.encodeComponent(path)}?alt=media';
 
-      await _firestore.collection('users').doc(viewedUid).update({'photoUrl': downloadUrl});
+      await firestore
+          .collection('users')
+          .doc(viewedUid)
+          .update({'photoUrl': downloadUrl});
       setState(() {
-        _photoUrl = downloadUrl;
+        photoUrl = downloadUrl;
       });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photo uploadée')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Photo uploadée')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Erreur: $e')));
     }
 
-    setState(() => _loading = false);
+    setState(() => loading = false);
   }
 
   Future<void> _saveProfile() async {
     try {
-      await _firestore.collection('users').doc(viewedUid).update({
-        'name': _nameController.text.trim(),
-        'surname': _surnameController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'email': _emailController.text.trim(),
-        'contacts': _contacts,
+      final user = auth.currentUser!;
+      // Si l'email a changé, ré-authentifier et mettre à jour
+      if (emailController.text.trim() != user.email) {
+        final passwordController = TextEditingController();
+        final result = await showDialog<String>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Confirmer email"),
+            content: TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration:
+                  const InputDecoration(labelText: "Mot de passe actuel"),
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Annuler")),
+              ElevatedButton(
+                  onPressed: () =>
+                      Navigator.pop(context, passwordController.text.trim()),
+                  child: const Text("Valider"))
+            ],
+          ),
+        );
+        if (result != null && result.isNotEmpty) {
+          final credential = EmailAuthProvider.credential(
+              email: user.email!, password: result);
+          await user.reauthenticateWithCredential(credential);
+          await user.updateEmail(emailController.text.trim());
+        } else {
+          // Annulé par l'utilisateur
+          return;
+        }
+      }
+
+      await firestore.collection('users').doc(viewedUid).update({
+        'name': nameController.text.trim(),
+        'surname': surnameController.text.trim(),
+        'phone': phoneController.text.trim(),
+        'email': emailController.text.trim(),
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profil mis à jour avec succès')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Profil mis à jour')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Erreur: $e')));
     }
   }
 
-  void _addOrEditContact({Map<String, dynamic>? contact, int? index}) {
-    final _contactNameController =
-        TextEditingController(text: contact != null ? contact['name'] : '');
-    final _contactPhoneController =
-        TextEditingController(text: contact != null ? contact['phone'] : '');
+  Future<void> _changePassword() async {
+    final oldPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmController = TextEditingController();
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(contact != null ? 'Modifier contact' : 'Ajouter contact'),
+        title: const Text("Changer le mot de passe"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: _contactNameController,
-              decoration: const InputDecoration(labelText: 'Nom du contact'),
+              controller: oldPasswordController,
+              obscureText: true,
+              decoration:
+                  const InputDecoration(labelText: "Ancien mot de passe"),
             ),
             TextField(
-              controller: _contactPhoneController,
-              decoration: const InputDecoration(labelText: 'Téléphone'),
-              keyboardType: TextInputType.phone,
+              controller: newPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "Nouveau mot de passe"),
+            ),
+            TextField(
+              controller: confirmController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "Confirmer"),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Annuler'),
+            child: const Text("Annuler"),
           ),
           ElevatedButton(
-            onPressed: () {
-              final newContact = {
-                'name': _contactNameController.text.trim(),
-                'phone': _contactPhoneController.text.trim(),
-              };
-              setState(() {
-                if (index != null) {
-                  _contacts[index] = newContact;
-                } else {
-                  _contacts.add(newContact);
-                }
-              });
-              Navigator.pop(context);
+            onPressed: () async {
+              final newPass = newPasswordController.text.trim();
+              final confirmPass = confirmController.text.trim();
+
+              if (newPass != confirmPass) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text("Les mots de passe ne correspondent pas")));
+                return;
+              }
+
+              try {
+                final user = auth.currentUser!;
+                await user.updatePassword(newPass);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content: Text("Mot de passe changé avec succès")));
+                Navigator.pop(context);
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Erreur: $e")));
+              }
             },
-            child: const Text('Enregistrer'),
+            child: const Text("Changer"),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _deleteContact(int index) async {
-    setState(() => _contacts.removeAt(index));
-  }
-
   Future<void> _logout() async {
-    await _auth.signOut();
-    if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
+    try {
+      await auth.signOut();
+      if (!mounted) return;
+
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur lors de la déconnexion: $e")));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
+    if (loading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
       );
@@ -178,8 +249,15 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profil utilisateur'),
+        title: Text(isEditing ? 'Modifier Profil' : 'Profil utilisateur'),
         actions: [
+          IconButton(
+            icon: Icon(isEditing ? Icons.save : Icons.edit),
+            onPressed: () {
+              if (isEditing) _saveProfile();
+              setState(() => isEditing = !isEditing);
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Déconnexion',
@@ -193,134 +271,71 @@ class _UserProfilePageState extends State<UserProfilePage> {
           children: [
             Card(
               elevation: 6,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
                 child: Column(
                   children: [
                     GestureDetector(
-                      onTap: _pickImageAndUpload,
+                      onTap: isEditing ? _pickImageAndUpload : null,
                       child: CircleAvatar(
                         radius: 50,
-                        backgroundImage: _photoUrl != null
-                            ? NetworkImage(_photoUrl!)
-                            : (_auth.currentUser!.photoURL != null
-                                ? NetworkImage(_auth.currentUser!.photoURL!)
+                        backgroundImage: photoUrl != null
+                            ? NetworkImage(photoUrl!)
+                            : (auth.currentUser!.photoURL != null
+                                ? NetworkImage(auth.currentUser!.photoURL!)
                                 : null) as ImageProvider<Object>?,
                         backgroundColor: Colors.grey[200],
-                        child: (_photoUrl == null && _auth.currentUser!.photoURL == null)
-                            ? const Icon(Icons.person, size: 50, color: Colors.grey)
+                        child: (photoUrl == null &&
+                                auth.currentUser!.photoURL == null)
+                            ? const Icon(Icons.person, size: 50)
                             : null,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '${_nameController.text} ${_surnameController.text}',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: nameController,
+                      readOnly: !isEditing,
+                      decoration: const InputDecoration(
+                        labelText: 'Nom',
+                        border: OutlineInputBorder(),
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _emailController.text,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.blueGrey),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: surnameController,
+                      readOnly: !isEditing,
+                      decoration: const InputDecoration(
+                        labelText: 'Prénom',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: emailController,
+                      readOnly: !isEditing,
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: phoneController,
+                      readOnly: !isEditing,
+                      decoration: const InputDecoration(
+                        labelText: 'Téléphone',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: isEditing ? _changePassword : null,
+                      child: const Text("Changer le mot de passe"),
                     ),
                   ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: 'Nom',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _surnameController,
-              decoration: const InputDecoration(
-                labelText: 'Prénom',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person_outline),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.email),
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _phoneController,
-              decoration: const InputDecoration(
-                labelText: 'Téléphone',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.phone),
-              ),
-              keyboardType: TextInputType.phone,
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Contacts prédéfinis', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                ElevatedButton.icon(
-                  onPressed: () => _addOrEditContact(),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Ajouter'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _contacts.length,
-              itemBuilder: (context, index) {
-                final contact = _contacts[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  child: ListTile(
-                    leading: const Icon(Icons.contact_phone),
-                    title: Text(contact['name'] ?? ''),
-                    subtitle: Text(contact['phone'] ?? ''),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit),
-                          onPressed: () => _addOrEditContact(contact: contact, index: index),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () => _deleteContact(index),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _saveProfile,
-                icon: const Icon(Icons.save),
-                label: const Text('Sauvegarder le profil'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
@@ -328,14 +343,5 @@ class _UserProfilePageState extends State<UserProfilePage> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _surnameController.dispose();
-    _phoneController.dispose();
-    _emailController.dispose();
-    super.dispose();
   }
 }

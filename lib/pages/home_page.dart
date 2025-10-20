@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'alerte_page.dart';
 import 'alerteform.dart';
 import 'map_page.dart';
+import 'user_profile.dart'; // <-- Import de ta page utilisateur
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,13 +24,8 @@ class _HomePageState extends State<HomePage> {
         child: Text('Contacts', style: TextStyle(fontSize: 20)),
       ),
     ),
-    // Onglet Profil
-    Container(
-      color: Colors.white,
-      child: const Center(
-        child: Text('Profil', style: TextStyle(fontSize: 20)),
-      ),
-    ),
+    // Onglet Profil → ici on insère UserProfilePage
+    const UserProfilePage(), // <-- Remplace le conteneur par la page utilisateur
   ];
 
   final List<String> _pageTitles = ["Carte", "Alertes", "Contacts", "Profil"];
@@ -38,13 +34,13 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.blue, // Couleur bleue pour la top barre
+        backgroundColor: Colors.blue,
         elevation: 0,
-        centerTitle: false, // Pour aligner à gauche
+        centerTitle: false,
         title: Row(
           children: [
             Image.asset(
-              'assets/logo.jpg', // Remplace par le chemin de ton logo si besoin
+              'assets/logo.jpg',
               height: 32,
               width: 32,
             ),
@@ -74,16 +70,15 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: FloatingActionButton(
         heroTag: 'home_fab',
         onPressed: () {
-          // Si on est sur la page Alertes, ouvrir le formulaire complet
           if (_currentIndex == 1) {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const AjoutAlertePage()),
             );
           } else {
-            // Pour Carte ou Profil, on peut définir d'autres actions si besoin
             ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Action non disponible ici.")));
+              const SnackBar(content: Text("Action non disponible ici.")),
+            );
           }
         },
         child: const Icon(Icons.add_alert),
