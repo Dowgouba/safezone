@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:safezone/pages/contacts_page.dart';
 import 'alerte_page.dart';
 import 'alerteform.dart';
 import 'map_page.dart';
-import 'user_profile.dart'; // <-- Import de ta page utilisateur
+import 'user_profile.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,33 +18,29 @@ class _HomePageState extends State<HomePage> {
   final List<Widget> _pagesWidgets = [
     const MapPage(),
     const AlertePage(),
-    // Onglet Contacts
-    Container(
-      color: Colors.white,
-      child: const Center(
-        child: Text('Contacts', style: TextStyle(fontSize: 20)),
-      ),
-    ),
-    // Onglet Profil → ici on insère UserProfilePage
-    const UserProfilePage(), // <-- Remplace le conteneur par la page utilisateur
+    const ContactsPage(),
+    const UserProfilePage(),
   ];
 
-  final List<String> _pageTitles = ["Carte", "Alertes", "Contacts", "Profil"];
+  final List<String> _pageTitles = ["Carte", "Listes des Alertes", "Mes Contacts prédéfinis", "Utilisateur connecté"];
+
+  void _onFabPressed() {
+    // Le FAB fonctionne partout, mais redirige toujours vers l'ajout d'alerte
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AjoutAlertePage()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.blue,
+        backgroundColor: const Color.fromARGB(255, 4, 68, 120),
         elevation: 0,
-        centerTitle: false,
         title: Row(
           children: [
-            Image.asset(
-              'assets/logo.jpg',
-              height: 32,
-              width: 32,
-            ),
+            Image.asset('assets/logo.jpg', height: 32, width: 32),
             const SizedBox(width: 10),
             const Text(
               'SafeZone',
@@ -68,20 +65,10 @@ class _HomePageState extends State<HomePage> {
       ),
       body: _pagesWidgets[_currentIndex],
       floatingActionButton: FloatingActionButton(
-        heroTag: 'home_fab',
-        onPressed: () {
-          if (_currentIndex == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AjoutAlertePage()),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Action non disponible ici.")),
-            );
-          }
-        },
-        child: const Icon(Icons.add_alert),
+        heroTag: 'global_fab',
+        onPressed: _onFabPressed,
+        backgroundColor: Colors.redAccent, // 🔴 couleur uniforme
+        child: const Icon(Icons.add_alert, color: Colors.white),
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,

@@ -32,6 +32,7 @@ class _LoginPageState extends State<LoginPage> {
         MaterialPageRoute(builder: (_) => const HomePage()),
       );
     } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message ?? 'Erreur inconnue')),
       );
@@ -68,8 +69,8 @@ class _LoginPageState extends State<LoginPage> {
                     // Image de l'utilisateur
                     CircleAvatar(
                       radius: 48,
-                      backgroundImage: AssetImage('assets/user.png'), // Mets ton image ici
-                      backgroundColor: Colors.grey[200],
+                      backgroundImage: const AssetImage('assets/user.png'),
+                      backgroundColor: Colors.grey,
                     ),
                     const SizedBox(height: 16),
                     Text(
@@ -79,7 +80,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                     ),
                     const SizedBox(height: 24),
-                    TextField(
+                    TextFormField(
                       controller: _emailController,
                       decoration: const InputDecoration(
                         labelText: 'Email',
@@ -89,7 +90,7 @@ class _LoginPageState extends State<LoginPage> {
                       keyboardType: TextInputType.emailAddress,
                     ),
                     const SizedBox(height: 16),
-                    TextField(
+                    TextFormField(
                       controller: _passwordController,
                       decoration: const InputDecoration(
                         labelText: 'Mot de passe',
